@@ -1,0 +1,59 @@
+# Build output
+build/
+out/
+install/
+
+# CMake artifacts (preserves source CMakeLists.txt files)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Visual Studio / MSBuild
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+x64/
+Debug/
+Release/
+
+# Binaries and intermediate objects
+*.exe
+*.dll
+*.lib
+*.pdb
+*.exp
+*.ilk
+*.o
+*.obj
+
+# CUDA device-code intermediates
+*.ptx
+*.cubin
+*.fatbin
+*.gpu
+*.i
+
+# VS Code (local per-machine settings — keep launch.json / tasks.json under version control if desired)
+.vscode/
+
+# JetBrains Rider
+.idea/
+
+# Logs and crash dumps
+*.log
+*.dmp
+
+# Windows Explorer artifacts
+Thumbs.db
+Desktop.ini
+
+# Claude helpers
+CLAUDE.md
+.claude
