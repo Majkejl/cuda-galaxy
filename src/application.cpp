@@ -5,7 +5,10 @@
 #include <GLFW/glfw3.h>
 
 Application::Application(GLFWwindow* window)
-    : m_window(window) {}
+    : m_window(window), m_sim(), 
+    m_renderer(m_sim.initialPositions(), m_sim.particleCount()) {
+        m_sim.registerVBO(m_renderer.vboId());
+}
 
 void Application::run() {
     int w, h;
@@ -23,6 +26,7 @@ void Application::run() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Particle rendering arrives in step 3b (VBO draw) / 3c (CUDA-GL interop).
+        m_renderer.draw(m_sim.particleCount());
 
         glfwSwapBuffers(m_window);
     }

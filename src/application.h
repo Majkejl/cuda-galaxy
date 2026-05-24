@@ -1,6 +1,7 @@
 #pragma once
 
 #include "simulation.h"
+#include "renderer.h"
 
 struct GLFWwindow;   // forward-declared so the GLFW header stays out of this interface
 
@@ -17,6 +18,7 @@ private:
 
     GLFWwindow* m_window;
     Simulation  m_sim;                   // owns all device buffers
+    Renderer    m_renderer;
     bool        m_paused       = false;
     bool        m_spaceWasDown = false;  // edge-detect SPACE so a held key toggles once
 };

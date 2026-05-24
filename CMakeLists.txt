@@ -76,10 +76,11 @@ glad_add_library(glad STATIC REPRODUCIBLE LOADER API gl:core=4.6)
 add_executable(cuda_nbody
 main.cpp
 src/application.cpp
-src/simulation.cu
+src/simulation.cpp
 src/renderer.cpp
 src/galaxy.cpp
 src/nbody.cu
+src/utils.cpp
 )
 
 target_compile_definitions(cuda_nbody PRIVATE
@@ -101,6 +102,25 @@ target_link_libraries(cuda_nbody PRIVATE
     glad
     CUDA::cudart
 )
+
+# We add an option to enable different settings when developing the app than
+# when distributing it.
+option(DEV_MODE "Set up development helper settings" ON)
+
+if(DEV_MODE)
+    # In dev mode, we load resources from the source tree, so that when we
+    # dynamically edit resources (like shaders), these are correctly
+    # versionned.
+    target_compile_definitions(cuda_nbody PRIVATE
+        RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+    )
+else()
+    # In release mode, we just load resources relatively to wherever the
+    # executable is launched from, so that the binary is portable
+    target_compile_definitions(cuda_nbody PRIVATE
+        RESOURCE_DIR="./shaders"
+    )
+endif()
 
 # opengl32 is already pulled in transitively by OpenGL::GL on Windows,
 # but listing it explicitly silences some linker warnings.

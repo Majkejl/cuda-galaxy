@@ -1,0 +1,91 @@
+#include "simulation.h"
+#include "nbody.cuh"
+
+#include <vector>
+#include <ranges>
+#include <random>
+#include <cstring>             // std::memcpy
+
+// cuda_gl_interop.h pulls in <GL/gl.h>, whose declarations use the WINGDIAPI/APIENTRY
+// macros — which only exist once <windows.h> has been included. So on Windows that must
+// come first or GL/gl.h fails to parse under MSVC. (LEAN_AND_MEAN/NOMINMAX keep the
+// windows.h blast radius small; GDI — and thus WINGDIAPI — is still pulled in.)
+#if defined(_WIN32)
+#  define WIN32_LEAN_AND_MEAN
+#  define NOMINMAX
+#  include <windows.h>
+#endif
+#include <cuda_gl_interop.h>   // cudaGraphics{GLRegisterBuffer,MapResources,...} — host-side interop API
+
+Simulation::Simulation() {
+    // Velocities and the force scratch buffer are CUDA-only (never rendered), so they get
+    // their own device allocations. Positions instead live in the VBO: the renderer uploads
+    // the initial positions, and from then on CUDA maps that same buffer each frame (see
+    // registerVBO()/step()). So there is deliberately NO separate device position buffer here.
+    //
+    // &m_dVel is a float4**, which does NOT implicitly convert to void** in C++ — hence the
+    // reinterpret_cast idiom every cudaMalloc needs now that the members are typed pointers.
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&m_dVel),    N * sizeof(float4)));
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&m_dForces), N * sizeof(float4)));
+
+    // Placeholder random ICs — replaced by the two-galaxy generator on Day 4.
+    std::vector<float4> hPos, hVel;
+    hPos.reserve(N);
+    hVel.reserve(N);
+    std::mt19937 rng(42);
+    std::uniform_real_distribution<float> dist(-1.f, 1.f);
+    for (int i : std::views::iota(0, N)) {
+        hPos.emplace_back(dist(rng), dist(rng), dist(rng), 1.f);   // .w = mass
+        hVel.emplace_back(0.f, 0.f, 0.f, 0.f);
+    }
+    // Hand the initial positions to the renderer, which uploads them into the VBO.
+    m_hInitPos.resize(N * 4);
+    std::memcpy(m_hInitPos.data(), hPos.data(), N * sizeof(float4));
+
+    // Only velocities need a device upload here; positions reach the GPU via the VBO.
+    CUDA_CHECK(cudaMemcpy(m_dVel, hVel.data(), N * sizeof(float4), cudaMemcpyHostToDevice));
+}
+
+Simulation::~Simulation() {
+    if (m_res) cudaGraphicsUnregisterResource(m_res);   // release the GL-shared buffer (GL ctx still alive here)
+    cudaFree(m_dVel);
+    cudaFree(m_dForces);
+}
+
+void Simulation::registerVBO(unsigned int vbo) {
+    // One-time, expensive call: declares that this GL buffer will be shared with CUDA.
+    // FlagsNone = read+write, contents preserved across frames. NOT WriteDiscard: every
+    // step computeForces READS last frame's positions out of this very buffer before
+    // integrate overwrites them, so the prior contents must survive.
+    CUDA_CHECK(cudaGraphicsGLRegisterBuffer(&m_res, vbo, cudaGraphicsRegisterFlagsNone));
+}
+
+int Simulation::particleCount() const { return N; }
+
+void Simulation::step() {
+    // Producer/consumer handoff. Map gives the buffer to CUDA (GL must not touch it now);
+    // unmap gives it back to GL for the draw. Map -> kernels -> unmap are all issued on the
+    // default stream in order, so no explicit cudaDeviceSynchronize is needed for the handoff.
+    CUDA_CHECK(cudaGraphicsMapResources(1, &m_res));
+
+    // The mapped pointer aliases the VBO's bytes as float4 (x,y,z, w=mass). Valid only
+    // between map and unmap, so it's a local — never cached across frames.
+    float4* dPos  = nullptr;
+    size_t  bytes = 0;
+    CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(&dPos), &bytes, m_res));
+
+    stepSimulation(dPos, m_dVel, m_dForces);
+
+#ifdef NBODY_DEBUG
+    if (m_step % 100 == 0) {
+        // Read positions straight from the mapped VBO — must happen before unmap.
+        std::vector<float4> hPos(N), hVel(N);
+        CUDA_CHECK(cudaMemcpy(hPos.data(), dPos,   N * sizeof(float4), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(hVel.data(), m_dVel, N * sizeof(float4), cudaMemcpyDeviceToHost));
+        printEnergyStats(hPos, hVel);
+    }
+#endif
+
+    CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_res));
+    ++m_step;
+}

@@ -1,5 +1,5 @@
 // Entry point only: create the GL context/window, then hand off to Application.
-// All simulation and CUDA logic lives elsewhere (application.cpp / simulation.cu).
+// All simulation and CUDA logic lives elsewhere (application.cpp / simulation.cpp).
 #define GLFW_INCLUDE_NONE   // we load OpenGL through glad, not GLFW's bundled headers
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -8,6 +8,17 @@
 #include <cstdlib>
 
 #include "application.h"
+
+// Hybrid-GPU (Optimus) hint: exporting these symbols from the EXE tells the NVIDIA (and
+// AMD) driver to launch us on the high-performance discrete GPU. CUDA-GL interop REQUIRES
+// GL and CUDA on the same GPU, so we must be on the dGPU — not the Intel iGPU the laptop
+// panel is wired to. Only takes effect when exported from the executable's own module.
+#if defined(_WIN32)
+extern "C" {
+    __declspec(dllexport) unsigned long NvOptimusEnablement                  = 0x00000001;
+    __declspec(dllexport) int           AmdPowerXpressRequestHighPerformance = 1;
+}
+#endif
 
 static void glfwErrorCallback(int code, const char* desc) {
     std::fprintf(stderr, "GLFW error %d: %s\n", code, desc);
