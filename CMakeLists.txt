@@ -74,7 +74,9 @@ glad_add_library(glad STATIC REPRODUCIBLE LOADER API gl:core=4.6)
 
 # ── Executable ────────────────────────────────────────────────────────────────
 add_executable(cuda_nbody
-src/main.cu
+main.cpp
+src/application.cpp
+src/simulation.cu
 src/renderer.cpp
 src/galaxy.cpp
 src/nbody.cu
