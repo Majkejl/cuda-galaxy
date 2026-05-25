@@ -1,6 +1,12 @@
 #version 460 core
-// Day 1 stub — full vertex shader (MVP transform, point size by depth) added Day 4.
 layout(location = 0) in vec3 aPos;
+
+uniform mat4 uViewProj;
+
 void main() {
-    gl_Position = vec4(aPos, 1.0);
+    vec4 clip = uViewProj * vec4(aPos, 1.0);
+    gl_Position = clip;
+    // Perspective point scaling: clip.w == -z_eye, so nearer particles (smaller w) draw
+    // larger. Clamp so near points don't balloon and far ones never vanish entirely.
+    gl_PointSize = clamp(6.0 / clip.w, 1.0, 20.0);
 }

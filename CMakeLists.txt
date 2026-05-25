@@ -35,6 +35,14 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw3)
 
+# GLM — header-only math (vectors/matrices) for the orbit camera. Exposes target glm::glm.
+FetchContent_Declare(glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG        1.0.1
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(glm)
+
 # GLAD v2 — generates an OpenGL 4.6 core loader at configure time via Python.
 # glad2 requires the Python package 'jinja2'. Install it automatically if absent.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -78,14 +86,15 @@ main.cpp
 src/application.cpp
 src/simulation.cpp
 src/renderer.cpp
+src/camera.cpp
 src/galaxy.cpp
 src/nbody.cu
 src/utils.cpp
 )
 
-target_compile_definitions(cuda_nbody PRIVATE
-    $<IF:$<CONFIG:Debug>,NBODY_DEBUG,>
-)
+# target_compile_definitions(cuda_nbody PRIVATE
+#     $<IF:$<CONFIG:Debug>,NBODY_DEBUG,>
+# )
 
 set_target_properties(cuda_nbody PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
@@ -100,6 +109,7 @@ target_link_libraries(cuda_nbody PRIVATE
     OpenGL::GL
     glfw
     glad
+    glm::glm
     CUDA::cudart
 )
 

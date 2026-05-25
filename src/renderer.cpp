@@ -1,6 +1,7 @@
 // Day 1 stub — implementation added Day 4.
 #include <string>
 #include <stdexcept>
+#include <glm/gtc/type_ptr.hpp>   // glm::value_ptr — hand a mat4 to glUniformMatrix4fv
 #include "renderer.h"
 #include "utils.h"
 
@@ -19,6 +20,10 @@ Renderer::Renderer(const void *data, int n) {
 
     // shaders
     compileShaders();
+
+    // Let the vertex shader drive point size via gl_PointSize (for perspective scaling).
+    // In a core profile this is off by default, so it must be explicitly enabled.
+    glEnable(GL_PROGRAM_POINT_SIZE);
 };
 
 Renderer::~Renderer() {
@@ -79,12 +84,15 @@ void Renderer::compileShaders() {
         glDeleteProgram(prog);
         throw std::runtime_error("program link failed:\n" + log);
     }
+
+    // Cache the uniform location once. -1 would mean GLSL optimized it out (e.g. unused).
+    m_uViewProj = glGetUniformLocation(prog, "uViewProj");
 }
 
-void Renderer::draw(int count) {
+void Renderer::draw(int count, const glm::mat4& viewProj) {
     glUseProgram(prog);
+    glUniformMatrix4fv(m_uViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
     glBindVertexArray(vao);
-    //glPointSize(10.f);
     glDrawArrays(GL_POINTS, 0, count);
 
     // TODO add post process pass
