@@ -7,7 +7,7 @@ Physics runs entirely on the GPU; positions are written directly to an OpenGL VB
 CUDA-OpenGL interop (no CPU round-trip). Runtime toggle between naive and shared-memory
 tiled kernels enables a live benchmark comparison.
 
-**Status:** In development — see `.claude/PROGRESS.md` for current state.
+**Status:** In development
 
 ---
 
@@ -51,4 +51,4 @@ Shaders are copied next to the executable by a post-build step.
 | 16 384 | ~? fps | ~60 fps |
 | 32 768 | ~? fps | ~? fps |
 
-*(Table filled in after benchmarking — see `.claude/PROGRESS.md` Day 7)*
+*(Table filled in after benchmarking)*
