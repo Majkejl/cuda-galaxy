@@ -15,7 +15,7 @@ Renderer::Renderer(const void *data, int n) {
 
     glBufferData(GL_ARRAY_BUFFER, n * 4 * sizeof(float), data, GL_DYNAMIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
 
     // shaders
@@ -24,6 +24,12 @@ Renderer::Renderer(const void *data, int n) {
     // Let the vertex shader drive point size via gl_PointSize (for perspective scaling).
     // In a core profile this is off by default, so it must be explicitly enabled.
     glEnable(GL_PROGRAM_POINT_SIZE);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_DST_ALPHA);
 };
 
 Renderer::~Renderer() {
@@ -93,6 +99,7 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
     glUseProgram(prog);
     glUniformMatrix4fv(m_uViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
     glBindVertexArray(vao);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDrawArrays(GL_POINTS, 0, count);
 
     // TODO add post process pass

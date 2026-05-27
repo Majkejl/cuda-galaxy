@@ -12,6 +12,7 @@ struct GalaxyParams{
     float coreMass = 2.f;
     float starMass = 0.00005f;
     float tiltRadians = 0.f;
+    float randomness = 0.2f;
 };
 
 // Appends p.count particles. For each: pos = (x,y,z, mass), vel = (vx,vy,vz, 0).
