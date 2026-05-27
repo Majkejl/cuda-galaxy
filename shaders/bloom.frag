@@ -1,5 +1,7 @@
 #version 460 core
-// Day 1 stub — bloom blur post-process pass added Day 6.
+
+layout(binding = 0) uniform sampler2D input_image;
+
 out vec4 FragColor;
 void main() {
     FragColor = vec4(1.0);

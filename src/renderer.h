@@ -7,6 +7,9 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
+constexpr float clear_color[4] = {0.1f, 0.1f, 0.3f, 1.f};
+constexpr float clear_depth[1] = {1.f};
+
 class Renderer {
 public:
     Renderer(const void *data, int n);
@@ -25,10 +28,16 @@ private:
     GLuint vbo;
 
     GLuint prog;
+    GLuint post;
+
+    GLuint framebuffer;
+    GLuint framebuffer_color;
+    GLuint framebuffer_depth;
 
     GLuint sh_vert;
     GLuint sh_frag;
     GLuint sh_post;
+    GLuint sh_postVert;
 
     GLint  m_uViewProj = -1;   // cached location of the uViewProj uniform
 };
