@@ -1,5 +1,6 @@
 #include "simulation.h"
 #include "nbody.cuh"
+#include "galaxy.h"
 
 #include <vector>
 #include <ranges>
@@ -28,16 +29,21 @@ Simulation::Simulation() {
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&m_dVel),    N * sizeof(float4)));
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void**>(&m_dForces), N * sizeof(float4)));
 
-    // Placeholder random ICs — replaced by the two-galaxy generator on Day 4.
     std::vector<float4> hPos, hVel;
     hPos.reserve(N);
     hVel.reserve(N);
-    std::mt19937 rng(42);
-    std::uniform_real_distribution<float> dist(-1.f, 1.f);
-    for (int i : std::views::iota(0, N)) {
-        hPos.emplace_back(dist(rng), dist(rng), dist(rng), 1.f);   // .w = mass
-        hVel.emplace_back(0.f, 0.f, 0.f, 0.f);
-    }
+   
+    GalaxyParams init(N / 2); // count
+    init.pos = {-1.5f, -0.3f, 0.f};
+    init.vel = {0.7f, 0.f, 0.f};
+    init.tiltRadians = 0.5f;
+    makeGalaxy(init, hPos, hVel);
+
+    init.pos = {1.5f, 0.3f, 0.f};
+    init.vel = {-0.7f, 0.f, 0.f};
+    init.tiltRadians = -1.f;
+    makeGalaxy(init, hPos, hVel);
+
     // Hand the initial positions to the renderer, which uploads them into the VBO.
     m_hInitPos.resize(N * 4);
     std::memcpy(m_hInitPos.data(), hPos.data(), N * sizeof(float4));
