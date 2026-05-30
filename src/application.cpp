@@ -23,6 +23,7 @@ Application::Application(GLFWwindow* window)
     : m_window(window), m_sim(),
     m_renderer(m_sim.initialPositions(), m_sim.particleCount()) {
     m_sim.registerVBO(m_renderer.vboId());
+    m_renderer.setStarMassRange(m_sim.starMassMin(), m_sim.starMassMax());
 
     // Route GLFW events to this instance and seed the viewport + camera aspect.
     glfwSetWindowUserPointer(m_window, this);
@@ -42,7 +43,7 @@ void Application::run() {
         if (!m_paused)
             m_sim.step();
 
-        glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+        //glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         m_renderer.draw(m_sim.particleCount(), m_camera.viewProjection());
@@ -59,6 +60,28 @@ void Application::processInput() {
     if (spaceDown && !m_spaceWasDown)
         m_paused = !m_paused;
     m_spaceWasDown = spaceDown;
+
+    // ] grows the bloom radius, [ shrinks it. Edge-detected so a held key steps once.
+    const bool blurUp = glfwGetKey(m_window, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS;
+    if (blurUp && !m_blurUpWasDown)
+        m_renderer.adjustBlur(+1);
+    m_blurUpWasDown = blurUp;
+
+    const bool blurDown = glfwGetKey(m_window, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS;
+    if (blurDown && !m_blurDownWasDown)
+        m_renderer.adjustBlur(-1);
+    m_blurDownWasDown = blurDown;
+
+    // . adds a bloom pyramid level (wider halo), , removes one (tighter). Edge-detected.
+    const bool levelsUp = glfwGetKey(m_window, GLFW_KEY_PERIOD) == GLFW_PRESS;
+    if (levelsUp && !m_levelsUpWasDown)
+        m_renderer.adjustLevels(+1);
+    m_levelsUpWasDown = levelsUp;
+
+    const bool levelsDown = glfwGetKey(m_window, GLFW_KEY_COMMA) == GLFW_PRESS;
+    if (levelsDown && !m_levelsDownWasDown)
+        m_renderer.adjustLevels(-1);
+    m_levelsDownWasDown = levelsDown;
 
     // Left-drag orbits. Only apply the delta when a drag is already in progress (it was
     // held last frame too), so the initial click doesn't snap the view by a stale delta.
@@ -82,6 +105,7 @@ void Application::onScroll(double yOffset) {
 
 void Application::onResize(int width, int height) {
     glViewport(0, 0, width, height);
+    m_renderer.resize(width, height);   // keep the bloom FBO textures matched to the window
     if (height > 0)
         m_camera.setAspect(static_cast<float>(width) / static_cast<float>(height));
 }

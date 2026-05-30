@@ -20,8 +20,15 @@ public:
 
     int particleCount() const;
     const void* initialPositions() const { return m_hInitPos.data(); }
+
+    // Star-mass tint range, derived from the star distribution (mean ± 2*sigma). Used both for
+    // the color ramp and as the size clamp; cores fall outside it and saturate to blue.
+    float starMassMin() const { return m_colorMassMin; }
+    float starMassMax() const { return m_colorMassMax; }
 private:
     std::vector<float>     m_hInitPos;             // initial positions, handed to the renderer's VBO
+    float                  m_colorMassMin = 0.f;   // mean - 2*sigma of the star mass distribution
+    float                  m_colorMassMax = 1.f;   // mean + 2*sigma (also the point-size mass clamp)
     cudaGraphicsResource_t m_res     = nullptr;    // CUDA handle to the GL VBO (the live positions)
     float4*                m_dVel    = nullptr;    // device velocities
     float4*                m_dForces = nullptr;    // device force/accel scratch
