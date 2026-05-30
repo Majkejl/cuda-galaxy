@@ -28,6 +28,14 @@ private:
     bool        m_paused       = false;
     bool        m_spaceWasDown = false;  // edge-detect SPACE so a held key toggles once
 
+    // Edge-detect the bloom-radius keys so one press = one step (not one per frame held).
+    bool        m_blurUpWasDown   = false;
+    bool        m_blurDownWasDown = false;
+
+    // Same edge-detect for the bloom-levels keys (how many pyramid levels are summed).
+    bool        m_levelsUpWasDown   = false;
+    bool        m_levelsDownWasDown = false;
+
     // Mouse-drag orbit state.
     bool   m_dragging = false;
     double m_lastX    = 0.0;
