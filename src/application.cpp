@@ -23,6 +23,7 @@ Application::Application(GLFWwindow* window)
     : m_window(window), m_sim(),
     m_renderer(m_sim.initialPositions(), m_sim.particleCount()) {
     m_sim.registerVBO(m_renderer.vboId());
+    m_renderer.setStarMassRange(m_sim.starMassMin(), m_sim.starMassMax());
 
     // Route GLFW events to this instance and seed the viewport + camera aspect.
     glfwSetWindowUserPointer(m_window, this);
@@ -42,7 +43,7 @@ void Application::run() {
         if (!m_paused)
             m_sim.step();
 
-        glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
+        //glClearColor(0.02f, 0.02f, 0.05f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         m_renderer.draw(m_sim.particleCount(), m_camera.viewProjection());

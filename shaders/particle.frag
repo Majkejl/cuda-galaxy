@@ -1,6 +1,6 @@
 #version 460 core
 
-layout(location = 1) in float weight;
+layout(location = 1) in float vColorMix;   // normalized star-mass tint: 0 = yellow, 1 = blue
 layout(location = 2) in float vSizeFade;   // from the vertex shader: energy-conserving size fade
 
 layout(location = 0) out vec4 FragColor;
@@ -33,8 +33,10 @@ void main() {
     // scene color AND the bloom threshold (which is derived from intensity) consistent.
     float intensity = (core * 1.5 + glow * 0.5) * coverage * vSizeFade;
     
-    // Output final color (e.g., bright cyan-white star)
-    vec3 starColor = mix(vec3(1.,0.94,0.6), vec3(0.9,0.99,1.), weight) * intensity;
+    // Warm (low-mass) → cool (high-mass) tint; vColorMix is already normalized to [0,1].
+    // Warm end is a saturated amber-gold (like a cool K-type star) rather than pale cream, so the
+    // low-mass majority reads as a distinct gold against the blue instead of washing toward white.
+    vec3 starColor = mix(vec3(0.4, 0.2, 0.9), vec3(0.7, 0.95, 1.0), vColorMix) * intensity;
     
     FragColor = vec4(starColor, intensity);
     float factor = smoothstep(0.75, 0.85, intensity);

@@ -64,6 +64,11 @@ void Renderer::resize(int width, int height) {
     m_fbWidth = width;
     m_fbHeight = height;
 
+    width *= m_ssaa;
+    height *= m_ssaa;
+    m_renderWidth  = width;    // everything offscreen (scene draw, blit, blur) sizes off these
+    m_renderHeight = height;
+
     // glTextureStorage2D allocates IMMUTABLE storage — you can't resize it in place, so the
     // only way to change dimensions is to delete and recreate the texture objects. The names
     // start at 0 (header init), and glDeleteTextures ignores 0, so the first call is safe.
@@ -196,7 +201,10 @@ void Renderer::compileShaders() {
 
     // Cache uniform locations once. -1 would mean GLSL optimized it out (e.g. unused). Sampler
     // bindings are fixed by layout(binding=...) in the shaders, so they need no location here.
-    m_uViewProj  = glGetUniformLocation(prog, "uViewProj");
+    m_uViewProj   = glGetUniformLocation(prog, "uViewProj");      // particle program (prog) uniforms
+    m_uPointScale = glGetUniformLocation(prog, "uPointScale");    // SSAA point-size scale — must come from prog
+    m_uMassMin    = glGetUniformLocation(prog, "uMassMin");       // star-mass tint range (also the size clamp)
+    m_uMassMax    = glGetUniformLocation(prog, "uMassMax");
 
     m_uGaussSize = glGetUniformLocation(post, "uGaussSize");   // per-level blur program
     m_uDirection = glGetUniformLocation(post, "uDirection");
@@ -204,6 +212,7 @@ void Renderer::compileShaders() {
 
     m_cLevels    = glGetUniformLocation(combine, "uLevels");   // combine/composite program
     m_cStrength  = glGetUniformLocation(combine, "uBloomStrength");
+    m_cSS        = glGetUniformLocation(combine, "uSS");
 }
 
 void Renderer::draw(int count, const glm::mat4& viewProj) {
@@ -215,12 +224,17 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
     
     glUseProgram(prog);
     glUniformMatrix4fv(m_uViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
+    glUniform1f(m_uPointScale, static_cast<float>(m_ssaa));
+    glUniform1f(m_uMassMin, m_starMassMin);   // constant, but cheap to re-send each frame
+    glUniform1f(m_uMassMax, m_starMassMax);
     glBindVertexArray(vao);
     
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE);
 
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    glViewport(0, 0, m_renderWidth, m_renderHeight);   // draw the scene at the supersampled size
 
     glDrawArrays(GL_POINTS, 0, count);
 
@@ -235,13 +249,13 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
     glNamedFramebufferReadBuffer(framebuffer, GL_COLOR_ATTACHMENT1);   // source = the threshold attachment
     glNamedFramebufferTexture(bloom_fbo, GL_COLOR_ATTACHMENT0, bloom_tex, 0);
     glBlitNamedFramebuffer(framebuffer, bloom_fbo,
-                           0, 0, m_fbWidth, m_fbHeight,
-                           0, 0, m_fbWidth, m_fbHeight,
+                           0, 0, m_renderWidth, m_renderHeight,   // threshold + pyramid are both render-size now
+                           0, 0, m_renderWidth, m_renderHeight,
                            GL_COLOR_BUFFER_BIT, GL_NEAREST);
     glGenerateTextureMipmap(bloom_tex);
 
     const int levels = (m_bloomLevels < m_bloomMipLevels) ? m_bloomLevels : m_bloomMipLevels;
-
+    
     // (2) Separable Gaussian on each level we'll use. Per level: set the viewport to the mip's
     //     size, H pass bloom_tex[L] → bloom_tmp[L], V pass bloom_tmp[L] → bloom_tex[L]. Reading
     //     and writing different textures keeps each pass free of a feedback loop.
@@ -249,9 +263,9 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
     glUniform1i(m_uGaussSize, m_gaussSize);
     glBindFramebuffer(GL_FRAMEBUFFER, bloom_fbo);
     for (int L = 0; L < levels; ++L) {
-        const int lw = (m_fbWidth  >> L) > 0 ? (m_fbWidth  >> L) : 1;
-        const int lh = (m_fbHeight >> L) > 0 ? (m_fbHeight >> L) : 1;
-        glViewport(0, 0, lw, lh);   // gl_FragCoord must span THIS level, not the full screen
+        const int lw = (m_renderWidth  >> L) > 0 ? (m_renderWidth  >> L) : 1;
+        const int lh = (m_renderHeight >> L) > 0 ? (m_renderHeight >> L) : 1;
+        glViewport(0, 0, lw, lh);   // gl_FragCoord must span THIS level of the render-size pyramid
         glUniform1i(m_uLod, L);
 
         // Horizontal: read level L of the pyramid, write level L of the ping-pong.
@@ -271,8 +285,10 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
     glViewport(0, 0, m_fbWidth, m_fbHeight);   // restore full-res viewport for the final pass
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(0, 0, m_fbWidth, m_fbHeight);
     glUseProgram(combine);
     glUniform1i(m_cLevels, levels);
+    glUniform1i(m_cSS, m_ssaa);
     glUniform1f(m_cStrength, m_bloomStrength);
     glBindTextureUnit(0, framebuffer_color);   // sceneTex = sharp scene color
     glBindTextureUnit(1, bloom_tex);           // bloomTex = mipmapped blurred pyramid
