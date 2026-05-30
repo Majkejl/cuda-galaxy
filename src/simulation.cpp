@@ -44,6 +44,17 @@ Simulation::Simulation() {
     init.tiltRadians = -1.f;
     makeGalaxy(init, hPos, hVel);
 
+    // Star tint/size range from the generative distribution: makeGalaxy draws star masses from
+    // N(starMass, starMass*randomness), so mean = starMass and sigma = starMass*randomness. Both
+    // galaxies reuse the same `init` params, so one range covers them. Normalizing over mean ±
+    // k*sigma derives the bounds from the population itself — the cores (coreMass, not drawn from
+    // this distribution) sit far above mean + k*sigma and are excluded as outliers by construction.
+    constexpr float kColorSigmas = 2.f;   // std-devs spanning the yellow→blue ramp (tunable)
+    const float mean  = init.starMass;
+    const float sigma = init.starMass * init.randomness;
+    m_colorMassMin = mean - kColorSigmas * sigma;
+    m_colorMassMax = mean + kColorSigmas * sigma;
+
     // Hand the initial positions to the renderer, which uploads them into the VBO.
     m_hInitPos.resize(N * 4);
     std::memcpy(m_hInitPos.data(), hPos.data(), N * sizeof(float4));
