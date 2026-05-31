@@ -4,6 +4,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -69,14 +70,23 @@ int render() {
     return 0;
 }
 
-int benchmark() {
+int benchmark(int iters) {
     Benchmark b;
-    b.run();
+    b.run(iters);
     return 0;
 }
 
 int main(int argc, char** argv) {
-    std::vector<std::string> arguments(argv, argv+argc);
-    return (argc > 1 && arguments[1] == "benchmark") ? 
-        benchmark() : render();
+    std::vector<std::string> arguments(argv, argv + argc);
+
+    // argv[1] = number of benchmark iterations. Anything that isn't a positive
+    // integer (or no arg at all) falls through to interactive rendering.
+    if (argc > 1) {
+        int iters = 0;
+        const std::string& arg = arguments[1];
+        auto [ptr, ec] = std::from_chars(arg.data(), arg.data() + arg.size(), iters);
+        if (ec == std::errc() && ptr == arg.data() + arg.size() && iters > 0)
+            return benchmark(iters);
+    }
+    return render();
 }
