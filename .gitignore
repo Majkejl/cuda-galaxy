@@ -57,3 +57,5 @@ Desktop.ini
 # Claude helpers
 CLAUDE.md
 .claude
+
+*.ncu-rep
