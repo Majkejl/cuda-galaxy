@@ -1,0 +1,7 @@
+kernel, N, GFLOPS/s, ms/step
+tiled, 8192, 2797.86
+tiled, 8192, 2795.68
+tiled, 8192, 2794.31
+tiled, 32768, 4667.35
+tiled, 262144, 5267.77
+tiled, 32768, 4667.53, 4.6009

@@ -17,6 +17,12 @@ REM     run them by hand (nvidia-smi --reset-gpu-clocks / --reset-memory-clocks)
 REM ============================================================================
 setlocal
 
+REM Run from the script's own folder. When launched "as administrator" Windows
+REM sets the working dir to C:\Windows\System32, so the exe's relative output
+REM (performance.csv) would land there instead of the repo root. /d also switches
+REM drive if needed. %~dp0 ends in a backslash, so quote it as-is.
+cd /d "%~dp0"
+
 REM Executable lives next to this script under build\Debug\ (%~dp0 = script dir).
 set "EXE=%~dp0build\Debug\cuda_nbody.exe"
 
@@ -53,7 +59,7 @@ REM --- optional: in a SEPARATE terminal, watch for throttling during the run --
 REM nvidia-smi --query-gpu=clocks.sm,clocks.mem,temperature.gpu,power.draw,pstate,clocks_throttle_reasons.active --format=csv -l 1
 
 echo === Running benchmark ======================================================
-"%EXE%" benchmark
+"%EXE%" 1500
 echo.
 
 echo === Releasing clocks (always, even if the run above failed) =================
