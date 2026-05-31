@@ -24,8 +24,8 @@ void main() {
     // size — but a floored star kept at full brightness twinkles as it slides across pixel
     // centers. So we also dim it by the AREA ratio (want/minPx)², making its TOTAL emitted
     // light invariant to the floor and steady under motion. want >= minPx → fade == 1 (no-op).
-    const float minPx = 3.0 * uPointScale;
-    float want = 6.0 / clip.w * weight * uPointScale;
+    const float minPx = 5.0 * uPointScale;
+    float want = 10.0 / clip.w * weight * uPointScale;
     gl_PointSize = clamp(want, minPx, 20.0 * uPointScale);
     float fade   = clamp(want / minPx, 0.0, 1.0);
     vSizeFade    = fade * fade;

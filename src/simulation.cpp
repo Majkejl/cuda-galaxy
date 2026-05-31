@@ -34,12 +34,14 @@ Simulation::Simulation() {
     hVel.reserve(N);
    
     GalaxyParams init(N / 2); // count
-    init.pos = {-1.5f, -0.3f, 0.f};
+    init.radius = 0.7f;
+    init.pos = {-3.0f, -0.3f, 0.f};
     init.vel = {0.7f, 0.f, 0.f};
     init.tiltRadians = 0.5f;
+    init.uniform = true;
     makeGalaxy(init, hPos, hVel);
 
-    init.pos = {1.5f, 0.3f, 0.f};
+    init.pos = {3.0f, 0.3f, 0.f};
     init.vel = {-0.7f, 0.f, 0.f};
     init.tiltRadians = -1.f;
     makeGalaxy(init, hPos, hVel);
