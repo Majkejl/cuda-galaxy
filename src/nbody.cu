@@ -5,25 +5,39 @@
 #include <iostream>
 #include "nbody.cuh"
 
-__global__ void computeForces(const float4* pos, float4* forces, int n)
+template<int N>
+__global__ void __launch_bounds__(BLOCK_SIZE) computeForces(const float4* __restrict__ pos, float4* __restrict__ forces)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return; // guard for when N isn't a multiple of BLOCK_SIZE
+    // if (i >= n) return; // guard for when N isn't a multiple of BLOCK_SIZE
 
     float fx = 0.f, fy = 0.f, fz = 0.f;
-    for (int j = 0; j < n; j++) {
-        float dx = pos[j].x - pos[i].x;
-        float dy = pos[j].y - pos[i].y;
-        float dz = pos[j].z - pos[i].z;
-        
-        float invDist = rsqrtf(dx * dx + dy*dy + dz*dz + EPS*EPS);
-        float s = G * pos[j].w * invDist * invDist * invDist;
-        
-        fx += dx * s;
-        fy += dy * s;
-        fz += dz * s;
-    };
+    float4 og_pos = pos[i];
 
+    #pragma unroll 1
+    for (int block = 0; block < N / BLOCK_SIZE; block++) {
+        __shared__ float4 s_pos[BLOCK_SIZE];
+        int copy_i = block * BLOCK_SIZE + threadIdx.x;
+        s_pos[threadIdx.x] = (copy_i >= N) ? float4(): pos[copy_i];
+        __syncthreads();
+        
+        #pragma unroll 16
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            float dx = s_pos[j].x - og_pos.x;
+            float dy = s_pos[j].y - og_pos.y;
+            float dz = s_pos[j].z - og_pos.z;
+            
+            float invDist = rsqrtf(dx * dx + dy*dy + dz*dz + EPS*EPS);
+            float s = G * s_pos[j].w * invDist * invDist * invDist;
+            
+            fx += dx * s;
+            fy += dy * s;
+            fz += dz * s;
+        };
+        __syncthreads();
+    }
+
+    if (i >= N) return;
     forces[i] = make_float4(fx, fy, fz, 0.f);
 }
 
@@ -46,7 +60,7 @@ void stepSimulation(float4* d_pos, float4* d_vel, float4* d_forces)
 {
     int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    computeForces<<<numBlocks, BLOCK_SIZE>>>(d_pos, d_forces, N);
+    computeForces<N><<<numBlocks, BLOCK_SIZE>>>(d_pos, d_forces);
     integrate<<<numBlocks, BLOCK_SIZE>>>(d_pos, d_vel, d_forces, N);
 }
 

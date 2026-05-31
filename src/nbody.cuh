@@ -15,7 +15,7 @@
         }                                                                       \
     } while (0)
 
-constexpr int   N           = 8192 * 6;
+constexpr int   N           = 8192 * 16;
 constexpr int   BLOCK_SIZE  = 256;
 constexpr float DT          = 0.001f;   // timestep
 constexpr float G           = 1.0f;     // simulation units
