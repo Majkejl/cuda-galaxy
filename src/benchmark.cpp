@@ -32,5 +32,5 @@ void Benchmark::run(int iters) {
     // Append one row to the running results table (header: kernel, N, GFLOPS/s).
     // Kernel name is hardcoded per branch — this is the tiled-kernel branch.
     std::ofstream csv("performance.csv", std::ios::app);
-    csv << "tiled, " << m_sim.particleCount() << ", " << gflops << ", " << msPerStep << '\n';
+    csv << "naive, " << m_sim.particleCount() << ", " << gflops << ", " << msPerStep << '\n';
 }
