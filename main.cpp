@@ -6,8 +6,11 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 #include "application.h"
+#include "benchmark.h"
 
 // Hybrid-GPU (Optimus) hint: exporting these symbols from the EXE tells the NVIDIA (and
 // AMD) driver to launch us on the high-performance discrete GPU. CUDA-GL interop REQUIRES
@@ -24,7 +27,7 @@ static void glfwErrorCallback(int code, const char* desc) {
     std::fprintf(stderr, "GLFW error %d: %s\n", code, desc);
 }
 
-int main() {
+int render() {
     glfwSetErrorCallback(glfwErrorCallback);
 
     if (!glfwInit()) {
@@ -64,4 +67,16 @@ int main() {
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
+}
+
+int benchmark() {
+    Benchmark b;
+    b.run();
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    std::vector<std::string> arguments(argv, argv+argc);
+    return (argc > 1 && arguments[1] == "benchmark") ? 
+        benchmark() : render();
 }

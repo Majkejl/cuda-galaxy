@@ -90,6 +90,7 @@ src/camera.cpp
 src/galaxy.cpp
 src/nbody.cu
 src/utils.cpp
+src/benchmark.cpp
 )
 
 # target_compile_definitions(cuda_nbody PRIVATE
