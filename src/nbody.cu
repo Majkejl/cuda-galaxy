@@ -6,7 +6,7 @@
 #include "nbody.cuh"
 
 template<int N>
-__global__ void __launch_bounds__(BLOCK_SIZE) computeForces(const float4* __restrict__ pos, float4* __restrict__ forces)
+__global__ void computeForces(const float4* __restrict__ pos, float4* __restrict__ forces)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     // if (i >= n) return; // guard for when N isn't a multiple of BLOCK_SIZE
@@ -21,7 +21,7 @@ __global__ void __launch_bounds__(BLOCK_SIZE) computeForces(const float4* __rest
         s_pos[threadIdx.x] = (copy_i >= N) ? float4(): pos[copy_i];
         __syncthreads();
         
-        #pragma unroll 16
+        #pragma unroll
         for (int j = 0; j < BLOCK_SIZE; j++) {
             float dx = s_pos[j].x - og_pos.x;
             float dy = s_pos[j].y - og_pos.y;
