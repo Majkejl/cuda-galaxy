@@ -38,7 +38,7 @@ Simulation::Simulation() {
     init.pos = {-3.0f, -0.3f, 0.f};
     init.vel = {0.7f, 0.f, 0.f};
     init.tiltRadians = 0.5f;
-    init.uniform = true;
+    //init.uniform = true;
     makeGalaxy(init, hPos, hVel);
 
     init.pos = {3.0f, 0.3f, 0.f};
@@ -67,6 +67,7 @@ Simulation::Simulation() {
 
 Simulation::~Simulation() {
     if (m_res) cudaGraphicsUnregisterResource(m_res);   // release the GL-shared buffer (GL ctx still alive here)
+    cudaFree(m_dPos);
     cudaFree(m_dVel);
     cudaFree(m_dForces);
 }
@@ -79,19 +80,28 @@ void Simulation::registerVBO(unsigned int vbo) {
     CUDA_CHECK(cudaGraphicsGLRegisterBuffer(&m_res, vbo, cudaGraphicsRegisterFlagsNone));
 }
 
+void Simulation::mallocPos() {
+    CUDA_CHECK(cudaMalloc(&m_dPos, N * sizeof(float4)));
+    CUDA_CHECK(cudaMemcpy(m_dPos, m_hInitPos.data(), N * sizeof(float4), cudaMemcpyHostToDevice));
+}
+
 int Simulation::particleCount() const { return N; }
 
-void Simulation::step() {
-    // Producer/consumer handoff. Map gives the buffer to CUDA (GL must not touch it now);
-    // unmap gives it back to GL for the draw. Map -> kernels -> unmap are all issued on the
-    // default stream in order, so no explicit cudaDeviceSynchronize is needed for the handoff.
-    CUDA_CHECK(cudaGraphicsMapResources(1, &m_res));
+void Simulation::step(const bool benchmark) {
+    
+    float4* dPos = m_dPos;
+    if (!benchmark) {
 
-    // The mapped pointer aliases the VBO's bytes as float4 (x,y,z, w=mass). Valid only
-    // between map and unmap, so it's a local — never cached across frames.
-    float4* dPos  = nullptr;
-    size_t  bytes = 0;
-    CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(&dPos), &bytes, m_res));
+        // Producer/consumer handoff. Map gives the buffer to CUDA (GL must not touch it now);
+        // unmap gives it back to GL for the draw. Map -> kernels -> unmap are all issued on the
+        // default stream in order, so no explicit cudaDeviceSynchronize is needed for the handoff.
+        CUDA_CHECK(cudaGraphicsMapResources(1, &m_res));
+        
+        // The mapped pointer aliases the VBO's bytes as float4 (x,y,z, w=mass). Valid only
+        // between map and unmap, so it's a local — never cached across frames.
+        size_t  bytes = 0;
+        CUDA_CHECK(cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(&dPos), &bytes, m_res));
+    }
 
     stepSimulation(dPos, m_dVel, m_dForces);
 
@@ -99,12 +109,12 @@ void Simulation::step() {
     if (m_step % 100 == 0) {
         // Read positions straight from the mapped VBO — must happen before unmap.
         std::vector<float4> hPos(N), hVel(N);
-        CUDA_CHECK(cudaMemcpy(hPos.data(), dPos,   N * sizeof(float4), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(hPos.data(), dPos, N * sizeof(float4), cudaMemcpyDeviceToHost));
         CUDA_CHECK(cudaMemcpy(hVel.data(), m_dVel, N * sizeof(float4), cudaMemcpyDeviceToHost));
         printEnergyStats(hPos, hVel);
     }
 #endif
 
-    CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_res));
+    if (!benchmark) CUDA_CHECK(cudaGraphicsUnmapResources(1, &m_res));
     ++m_step;
 }
