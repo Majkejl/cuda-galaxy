@@ -13,9 +13,9 @@ struct GalaxyParams{
     float starMass = 0.00005f;
     float tiltRadians = 0.f;
     float randomness = 0.2f;
-    unsigned arms = 6;
+    unsigned arms = 4;
     float pitch = 0.6f;
-    float armSpread = 0.3f;
+    float armSpread = 0.4f;
     bool uniform = false;
 };
 

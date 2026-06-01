@@ -28,35 +28,45 @@ static void glfwErrorCallback(int code, const char* desc) {
     std::fprintf(stderr, "GLFW error %d: %s\n", code, desc);
 }
 
-int render() {
+// Bring up GLFW + a 4.6-core context + GLAD. Shared by the interactive (visible) and the
+// film (hidden) paths — the only difference between them is GLFW_VISIBLE. Returns the window,
+// or nullptr (already torn down) on failure. glfwInit() is a no-op if already initialized, so
+// it's safe even though only one mode runs per process. The caller sets glfwSwapInterval.
+static GLFWwindow* createContext(int width, int height, bool visible) {
     glfwSetErrorCallback(glfwErrorCallback);
 
     if (!glfwInit()) {
         std::fprintf(stderr, "glfwInit failed\n");
-        return EXIT_FAILURE;
+        return nullptr;
     }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_VISIBLE, visible ? GLFW_TRUE : GLFW_FALSE);
 
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "cuda-nbody", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(width, height, "cuda-nbody", nullptr, nullptr);
     if (!window) {
         std::fprintf(stderr, "window creation failed\n");
         glfwTerminate();
-        return EXIT_FAILURE;
+        return nullptr;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);   // vsync
 
-    // GLAD must load the GL function pointers AFTER a context is current and BEFORE
-    // any GL call (including the VBO creation that arrives in step 3b).
+    // GLAD must load the GL function pointers AFTER a context is current and BEFORE any GL call.
     if (!gladLoadGL(glfwGetProcAddress)) {
         std::fprintf(stderr, "gladLoadGL failed\n");
         glfwDestroyWindow(window);
         glfwTerminate();
-        return EXIT_FAILURE;
+        return nullptr;
     }
+    return window;
+}
+
+int render() {
+    GLFWwindow* window = createContext(1280, 720, /*visible=*/true);
+    if (!window) return EXIT_FAILURE;
+    glfwSwapInterval(1);   // vsync
 
     {
         // Scoped so Application (and its device buffers) is destroyed while the GL
@@ -70,14 +80,103 @@ int render() {
     return 0;
 }
 
+// Offline render: a hidden, tiny window just supplies the GL context — every frame is drawn
+// into the renderer's offscreen FBO at p.outW x p.outH (independent of the window/monitor),
+// read back, and piped to ffmpeg. No vsync, no input, no buffer swap; decoupled from real time.
+int film(const FilmParams_t& p) {
+    GLFWwindow* window = createContext(16, 16, /*visible=*/false);
+    if (!window) return EXIT_FAILURE;
+    glfwSwapInterval(0);   // we never present, but make the intent explicit
+
+    {
+        Application app(window);   // scoped like render(): device buffers die while GL is alive
+        app.recordFilm(p);         // the VideoWriter inside finalizes the mp4 on return
+    }
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 0;
+}
+
 int benchmark(int iters) {
     Benchmark b;
     b.run(iters);
     return 0;
 }
 
+// --- film argv parsing helpers: each parses a WHOLE token (no trailing junk) ---
+static bool parseInt(const std::string& s, int& out) {
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), out);
+    return ec == std::errc() && ptr == s.data() + s.size();
+}
+static bool parseFloat(const std::string& s, float& out) {
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), out);
+    return ec == std::errc() && ptr == s.data() + s.size();
+}
+// "WxH" (e.g. 1920x1080) → w, h. Accepts 'x' or 'X'.
+static bool parseRes(const std::string& s, int& w, int& h) {
+    const auto sep = s.find_first_of("xX");
+    if (sep == std::string::npos) return false;
+    return parseInt(s.substr(0, sep), w) && parseInt(s.substr(sep + 1), h) && w > 0 && h > 0;
+}
+
 int main(int argc, char** argv) {
     std::vector<std::string> arguments(argv, argv + argc);
+
+    // "film [flags]" → offline render to a video file. A non-numeric keyword can't collide with
+    // the benchmark parse below. Each flag maps to a FilmParams_t member and takes one value token:
+    //   --res WxH   --frames N   --fps N   --speed N   --orbit F   --out PATH
+    // Anything unset keeps the struct's default.
+    if (argc > 1 && arguments[1] == "film") {
+        FilmParams_t p;
+        auto usage = [] {
+            std::fprintf(stderr,
+                "usage: cuda_nbody film [--res WxH] [--frames N] [--fps N] "
+                "[--speed N] [--orbit F] [--out PATH]\n");
+            return EXIT_FAILURE;
+        };
+        for (size_t i = 2; i < arguments.size(); ++i) {
+            const std::string& flag = arguments[i];
+            if (i + 1 >= arguments.size()) {
+                std::fprintf(stderr, "missing value for %s\n", flag.c_str());
+                return usage();
+            }
+            const std::string& val = arguments[++i];   // consume the value token
+
+            if (flag == "--res") {
+                if (!parseRes(val, p.outW, p.outH)) {
+                    std::fprintf(stderr, "bad --res '%s' (expected WxH, e.g. 1920x1080)\n", val.c_str());
+                    return usage();
+                }
+            } else if (flag == "--frames") {
+                if (!parseInt(val, p.frames) || p.frames <= 0) {
+                    std::fprintf(stderr, "bad --frames '%s' (expected positive int)\n", val.c_str());
+                    return usage();
+                }
+            } else if (flag == "--fps") {
+                if (!parseInt(val, p.fps) || p.fps <= 0) {
+                    std::fprintf(stderr, "bad --fps '%s' (expected positive int)\n", val.c_str());
+                    return usage();
+                }
+            } else if (flag == "--speed") {
+                if (!parseInt(val, p.speed) || p.speed <= 0) {
+                    std::fprintf(stderr, "bad --speed '%s' (expected positive int, sim steps/frame)\n", val.c_str());
+                    return usage();
+                }
+            } else if (flag == "--orbit") {
+                if (!parseFloat(val, p.orbit)) {
+                    std::fprintf(stderr, "bad --orbit '%s' (expected float, radians/frame)\n", val.c_str());
+                    return usage();
+                }
+            } else if (flag == "--out") {
+                p.out = val;
+            } else {
+                std::fprintf(stderr, "unknown flag '%s'\n", flag.c_str());
+                return usage();
+            }
+        }
+        return film(p);
+    }
 
     // argv[1] = number of benchmark iterations. Anything that isn't a positive
     // integer (or no arg at all) falls through to interactive rendering.

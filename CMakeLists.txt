@@ -91,6 +91,7 @@ src/galaxy.cpp
 src/nbody.cu
 src/utils.cpp
 src/benchmark.cpp
+src/video_writer.cpp
 )
 
 # target_compile_definitions(cuda_nbody PRIVATE

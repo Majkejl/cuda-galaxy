@@ -1,8 +1,12 @@
 #include "application.h"
+#include "video_writer.h"
 
 #define GLFW_INCLUDE_NONE   // GL comes from glad, not GLFW's bundled headers
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+
+#include <iostream>
+#include <iomanip>
 
 namespace {
     // GLFW takes C function pointers, so we route its callbacks back to the Application
@@ -49,6 +53,29 @@ void Application::run() {
         m_renderer.draw(m_sim.particleCount(), m_camera.viewProjection());
 
         glfwSwapBuffers(m_window);
+    }
+}
+
+void Application::recordFilm(const FilmParams_t &p) {
+    m_renderer.resize(p.outW, p.outH);
+    m_camera.setAspect(static_cast<float>(p.outW) / static_cast<float>(p.outH));
+    m_camera.zoom(-10.f);
+
+    VideoWriter vw(p.outW, p.outH, p.fps, p.out);
+    std::vector<unsigned char> frame(static_cast<size_t>(p.outW) * p.outH * 4);
+
+    for (int k = 0; k < p.frames; ++k) {
+        for (int s = 0; s < p.speed; ++s) m_sim.step();   // p.speed sim steps per rendered frame
+        m_camera.orbit(p.orbit, 0.f);
+        m_renderer.draw(m_sim.particleCount(),
+                        m_camera.viewProjection(),
+                        m_renderer.outputFbo());
+        m_renderer.readOutput(frame);                  
+        vw.writeFrame(frame.data(), frame.size());      
+        // progress: a large-N film is slow, so print every ~30 frames
+        // if (k % 5 == 0)
+        //     std::cout << "\rPROGRESS: " << std::setprecision(2) << 
+        //             std::fixed << std::setw(8) << 100.f * k / p.frames << "%" << std::flush;
     }
 }
 

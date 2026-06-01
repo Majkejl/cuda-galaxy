@@ -27,7 +27,7 @@ void makeGalaxy(const GalaxyParams &p, std::vector<float4> &pos, std::vector<flo
         k = floor(u(gen) * p.arms);
         armOffset = k * 2 * std::numbers::pi / p.arms;
         spiral = logf(r/p.radius + 0.0001) / tanf(p.pitch);
-        scatter = gauss(gen) * p.armSpread * p.radius * p.radius / r;
+        scatter = -log(u(gen) * u(gen)) * p.armSpread;//  * p.radius * p.radius / r;
         theta = armOffset - spiral + scatter;
 
         auto fr = (p.uniform) ? (r/p.radius) * (r/p.radius) :

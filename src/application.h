@@ -4,7 +4,19 @@
 #include "renderer.h"
 #include "camera.h"
 
+#include <string>
+
 struct GLFWwindow;   // forward-declared so the GLFW header stays out of this interface
+
+struct FilmParams_t {
+    int frames = 300;
+    int outW = 1000;
+    int outH = 1000;
+    int fps = 30;
+    int speed = 1;                 // sim steps per rendered frame; >1 fast-forwards sim-time
+    float orbit = 0.f;             // radians of yaw added per frame; 0 = static camera
+    std::string out = "out.mp4";   // value (not reference): a default-bound reference would dangle
+};
 
 // High-level orchestration: owns the render/sim loop, the camera, and input handling.
 // Pure C++ — no CUDA headers. The GPU work is delegated to Simulation.
@@ -13,6 +25,7 @@ public:
     explicit Application(GLFWwindow* window);
 
     void run();   // poll input, step the sim, render — until the window closes
+    void recordFilm(const FilmParams_t &params);
 
     // GLFW event hooks, invoked via thin static thunks in application.cpp.
     void onScroll(double yOffset);

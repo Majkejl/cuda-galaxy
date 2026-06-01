@@ -18,7 +18,7 @@ public:
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
-    void draw(int count, const glm::mat4& viewProj);
+    void draw(int count, const glm::mat4& viewProj, GLuint targetFbo = 0);
 
     void resize(int width, int height);   // (re)create the FBO textures to match the framebuffer size
     void adjustBlur(int delta);           // step the per-level blur radius (clamped); keybind-driven
@@ -26,6 +26,11 @@ public:
 
     // Star-mass tint range (mean ± 2*sigma), supplied by Simulation from the galaxy distribution.
     void setStarMassRange(float lo, float hi) { m_starMassMin = lo; m_starMassMax = hi; }
+
+    void readOutput(std::vector<unsigned char>& rgba) const;
+    GLuint  outputFbo()     const { return output_fbo; }
+    int     outputWidth()   const { return m_fbWidth; }
+    int     outputHeight()  const { return m_fbHeight; }
 
     unsigned int vboId() const { return vbo; }
 private:
@@ -43,6 +48,9 @@ private:
     GLuint framebuffer;
     GLuint framebuffer_color = 0;   // 0-init: resize() deletes these before first (re)creation,
     GLuint framebuffer_tresh = 0;   // and glDeleteTextures(0) is a defined no-op
+
+    GLuint output_fbo = 0;
+    GLuint output_tex = 0;
 
     GLuint bloom_fbo;               // reusable post FBO; re-pointed at a (texture, level) per pass
     GLuint bloom_tex = 0;           // mipmapped pyramid: holds the per-level blurred bloom

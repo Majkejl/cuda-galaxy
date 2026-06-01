@@ -36,6 +36,7 @@ Renderer::Renderer(const void *data, int n) {
     // specific (texture, mip level) before each blur draw, so a single FBO covers the whole
     // pyramid. Its textures live in bloom_tex / bloom_tmp, sized by resize().
     glCreateFramebuffers(1, &bloom_fbo);
+    glCreateFramebuffers(1, &output_fbo);
 
     // All FBO textures are sized to the actual framebuffer (no hardcoded dimensions): the
     // Application calls resize() once at startup and again on every window resize.
@@ -56,6 +57,8 @@ Renderer::~Renderer() {
     glDeleteTextures(1, &bloom_tex);
     glDeleteTextures(1, &bloom_tmp);
     glDeleteFramebuffers(1, &bloom_fbo);
+    glDeleteTextures(1, &output_tex);
+    glDeleteFramebuffers(1, &output_fbo);
 }
 
 void Renderer::resize(int width, int height) {
@@ -64,10 +67,8 @@ void Renderer::resize(int width, int height) {
     m_fbWidth = width;
     m_fbHeight = height;
 
-    width *= m_ssaa;
-    height *= m_ssaa;
-    m_renderWidth  = width;    // everything offscreen (scene draw, blit, blur) sizes off these
-    m_renderHeight = height;
+    m_renderWidth  = width * m_ssaa;    // everything offscreen (scene draw, blit, blur) sizes off these
+    m_renderHeight = height * m_ssaa;
 
     // glTextureStorage2D allocates IMMUTABLE storage — you can't resize it in place, so the
     // only way to change dimensions is to delete and recreate the texture objects. The names
@@ -76,18 +77,21 @@ void Renderer::resize(int width, int height) {
     glDeleteTextures(1, &framebuffer_tresh);
     glDeleteTextures(1, &bloom_tex);
     glDeleteTextures(1, &bloom_tmp);
+    glDeleteTextures(1, &output_tex);
 
     // Scene color + threshold: single-level, RGBA32F so HDR bright values survive un-clamped.
     glCreateTextures(GL_TEXTURE_2D, 1, &framebuffer_color);
-    glTextureStorage2D(framebuffer_color, 1, GL_RGBA32F, width, height);
+    glTextureStorage2D(framebuffer_color, 1, GL_RGBA32F, m_renderWidth, m_renderHeight);
     glCreateTextures(GL_TEXTURE_2D, 1, &framebuffer_tresh);
-    glTextureStorage2D(framebuffer_tresh, 1, GL_RGBA32F, width, height);
-
+    glTextureStorage2D(framebuffer_tresh, 1, GL_RGBA32F, m_renderWidth, m_renderHeight);
+    
+    glCreateTextures(GL_TEXTURE_2D, 1, &output_tex);
+    glTextureStorage2D(output_tex, 1, GL_RGBA8, m_fbWidth, m_fbHeight);
     // How many pyramid levels this size supports, capped at the ceiling. Level L is
     // floor(base / 2^L); stop before either dimension would shift to 0.
     m_bloomMipLevels = 1;
     while (m_bloomMipLevels < kBloomLevels &&
-           (width >> m_bloomMipLevels) > 0 && (height >> m_bloomMipLevels) > 0)
+           (m_renderWidth >> m_bloomMipLevels) > 0 && (m_renderHeight >> m_bloomMipLevels) > 0)
         ++m_bloomMipLevels;
     if (m_bloomLevels > m_bloomMipLevels) m_bloomLevels = m_bloomMipLevels;  // keep runtime use valid
 
@@ -95,7 +99,7 @@ void Renderer::resize(int width, int height) {
     // pass's textureLod upscales each coarse level smoothly; CLAMP_TO_EDGE avoids border bleed.
     for (GLuint* tex : {&bloom_tex, &bloom_tmp}) {
         glCreateTextures(GL_TEXTURE_2D, 1, tex);
-        glTextureStorage2D(*tex, m_bloomMipLevels, GL_RGBA32F, width, height);
+        glTextureStorage2D(*tex, m_bloomMipLevels, GL_RGBA32F, m_renderWidth, m_renderHeight);
         glTextureParameteri(*tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
         glTextureParameteri(*tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(*tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -106,6 +110,7 @@ void Renderer::resize(int width, int height) {
     // bloom_fbo is re-attached per pass in draw(), so it needs nothing here.
     glNamedFramebufferTexture(framebuffer, GL_COLOR_ATTACHMENT0, framebuffer_color, 0);
     glNamedFramebufferTexture(framebuffer, GL_COLOR_ATTACHMENT1, framebuffer_tresh, 0);
+    glNamedFramebufferTexture(output_fbo, GL_COLOR_ATTACHMENT0, output_tex, 0);
 }
 
 void Renderer::adjustBlur(int delta) {
@@ -215,7 +220,7 @@ void Renderer::compileShaders() {
     m_cSS        = glGetUniformLocation(combine, "uSS");
 }
 
-void Renderer::draw(int count, const glm::mat4& viewProj) {
+void Renderer::draw(int count, const glm::mat4& viewProj, GLuint targetFbo) {
 
     glClearColor(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -283,7 +288,7 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
 
     // (3) Combine to the screen: sum the blurred levels (linear-upscaled) and add the scene.
     glViewport(0, 0, m_fbWidth, m_fbHeight);   // restore full-res viewport for the final pass
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, targetFbo);
     glClear(GL_COLOR_BUFFER_BIT);
     glViewport(0, 0, m_fbWidth, m_fbHeight);
     glUseProgram(combine);
@@ -293,4 +298,10 @@ void Renderer::draw(int count, const glm::mat4& viewProj) {
     glBindTextureUnit(0, framebuffer_color);   // sceneTex = sharp scene color
     glBindTextureUnit(1, bloom_tex);           // bloomTex = mipmapped blurred pyramid
     glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+
+void Renderer::readOutput(std::vector<unsigned char>& rgba) const {
+    glBindFramebuffer(GL_FRAMEBUFFER, output_fbo);
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    glReadPixels(0,0, m_fbWidth, m_fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
 }
